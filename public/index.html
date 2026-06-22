@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Schedule Advisor</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="board" class="board hidden">
+    <header class="board-header">
+      <h2>Your Schedule</h2>
+      <div class="view-tabs">
+        <button class="view-tab active" data-view="board" type="button">📋 Board</button>
+        <button class="view-tab" data-view="calendar" type="button">📅 Calendar</button>
+      </div>
+    </header>
+
+    <div class="columns" id="boardColumns">
+      <section class="column" data-column="todo">
+        <h3>To Do <span class="count" data-count="todo"></span></h3>
+        <div class="cards" data-column="todo"></div>
+        <button class="add-card-btn" data-column="todo" type="button">+ Add card</button>
+      </section>
+      <section class="column" data-column="doing">
+        <h3>Doing <span class="count" data-count="doing"></span></h3>
+        <div class="cards" data-column="doing"></div>
+        <button class="add-card-btn" data-column="doing" type="button">+ Add card</button>
+      </section>
+      <section class="column" data-column="done">
+        <h3>Done <span class="count" data-count="done"></span></h3>
+        <div class="cards" data-column="done"></div>
+        <button class="add-card-btn" data-column="done" type="button">+ Add card</button>
+      </section>
+    </div>
+
+    <div class="calendar hidden" id="calendarView">
+      <div class="calendar-body">
+        <div class="calendar-grid" id="calendarGrid"></div>
+      </div>
+      <div class="unscheduled-bar" id="unscheduledBar"></div>
+    </div>
+  </div>
+
+  <div class="app" id="app">
+    <header class="header">
+      <span class="header-dot"></span>
+      <h1>Schedule Advisor</h1>
+      <button id="minimizeChat" class="icon-btn hidden" type="button" title="Minimize">&#8211;</button>
+    </header>
+
+    <main id="chat" class="chat"></main>
+
+    <form id="form" class="composer">
+      <input
+        id="input"
+        type="text"
+        placeholder="Tell me about your day, tasks, or goals..."
+        autocomplete="off"
+      />
+      <button id="send" type="submit">Send</button>
+    </form>
+  </div>
+
+  <button id="chatBubble" class="chat-bubble hidden" type="button" title="Open chat">&#128172;</button>
+
+  <div id="taskModal" class="modal-overlay hidden">
+    <div class="modal">
+      <button id="modalClose" class="modal-close" type="button">&#10005;</button>
+
+      <div class="modal-color-row" id="modalColorRow"></div>
+
+      <input id="modalTitle" class="modal-title-input" type="text" placeholder="Task title" />
+
+      <div class="modal-time-row">
+        <label>Start<input id="modalStart" type="time" /></label>
+        <label>End<input id="modalEnd" type="time" /></label>
+      </div>
+
+      <textarea id="modalDescription" class="modal-description" placeholder="Add a description..."></textarea>
+
+      <div class="modal-image-row">
+        <div id="modalImagePreview" class="modal-image-preview hidden">
+          <img id="modalImageImg" alt="Task attachment" />
+          <button id="modalImageRemove" type="button" title="Remove image">&#10005;</button>
+        </div>
+        <label class="modal-image-upload-btn">
+          &#128247; Add image
+          <input id="modalImageInput" type="file" accept="image/*" hidden />
+        </label>
+      </div>
+
+      <div class="modal-actions">
+        <button id="modalDelete" class="modal-delete-btn" type="button">Delete task</button>
+        <button id="modalSave" class="modal-save-btn" type="button">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/vendor/marked/marked.umd.js"></script>
+  <script src="/vendor/dompurify/purify.min.js"></script>
+  <script src="/vendor/jspdf/jspdf.umd.min.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>

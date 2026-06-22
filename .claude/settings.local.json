@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(npm install)",
+      "Read(//c/c/Users/Asus/OneDrive/Desktop/Claude agent/**)",
+      "Bash(curl -s -X POST https://api.anthropic.com/v1/messages -H \"x-api-key: $\\(grep ANTHROPIC_API_KEY .env)",
+      "Bash(curl -s https://api.anthropic.com/v1/models -H \"x-api-key: $\\(grep ANTHROPIC_API_KEY .env)",
+      "Bash(curl -s -X POST http://localhost:3000/api/chat -H \"content-type: application/json\" -d '{\"messages\":[{\"role\":\"user\",\"content\":\"Say hi in 3 words\"}]}')",
+      "Bash(taskkill //PID 1104 //F)",
+      "Bash(curl -s -X POST http://localhost:3000/api/chat -H \"content-type: application/json\" -d '{\"messages\":[{\"role\":\"user\",\"content\":\"I need to study for an exam tomorrow, go grocery shopping, and call my mom\"}]}')",
+      "Bash(netstat -ano)",
+      "Bash(taskkill //PID 26780 //F)",
+      "Bash(curl -s http://localhost:3000/vendor/marked/marked.umd.js)",
+      "Bash(curl -s http://localhost:3000/vendor/dompurify/purify.min.js)",
+      "Bash(curl -s -X POST http://localhost:3000/api/chat -H \"content-type: application/json\" -d '{\"messages\":[{\"role\":\"user\",\"content\":\"My day: study for exam 9-11am, grocery shopping 2-3pm, call mom 7pm for 30 min. That'\\\\''s final, give me the schedule.\"}]}')",
+      "Bash(curl -s http://localhost:3000/ -o /dev/null -w \"%{http_code}\\\\n\")",
+      "Bash(node --check public/script.js)",
+      "Bash(node --check server.js)",
+      "Bash(curl -s http://localhost:3000/vendor/jspdf/jspdf.umd.min.js -o /dev/null -w \"jspdf: %{http_code}\\\\n\")",
+      "Bash(curl -s http://localhost:3000/ -o /dev/null -w \"index: %{http_code}\\\\n\")"
+    ]
+  }
+}
