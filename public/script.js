@@ -1,3 +1,14 @@
+const authScreen = document.getElementById("authScreen");
+const authForm = document.getElementById("authForm");
+const authEmail = document.getElementById("authEmail");
+const authPassword = document.getElementById("authPassword");
+const authError = document.getElementById("authError");
+const authSubmit = document.getElementById("authSubmit");
+const authToggleBtn = document.getElementById("authToggleBtn");
+const authToggleText = document.getElementById("authToggleText");
+const authSubtitle = document.getElementById("authSubtitle");
+const logoutBtn = document.getElementById("logoutBtn");
+
 const chat = document.getElementById("chat");
 const form = document.getElementById("form");
 const input = document.getElementById("input");
@@ -32,6 +43,228 @@ function loadState() {
 
 function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify({ tasks, boardActive }));
+}
+
+// ---------- Supabase auth + sync ----------
+
+let db = null;
+let currentUser = null;
+let isSignupMode = false;
+
+function rowToTask(row) {
+  return {
+    id: row.id,
+    title: row.title,
+    time: row.time || "",
+    description: row.description || "",
+    column: row.status || "todo",
+    color: row.color || null,
+    image: row.image_url || undefined,
+  };
+}
+
+function taskToRow(task) {
+  return {
+    id: task.id,
+    user_id: currentUser.id,
+    title: task.title,
+    time: task.time || "",
+    description: task.description || "",
+    status: task.column,
+    color: task.color || null,
+    image_url: task.image || null,
+  };
+}
+
+async function syncTask(task) {
+  if (!db || !currentUser) return;
+  const { error } = await db.from("tasks").upsert(taskToRow(task));
+  if (error) console.error("Sync failed:", error.message);
+}
+
+async function syncDeleteTask(id) {
+  if (!db || !currentUser) return;
+  const { error } = await db.from("tasks").delete().eq("id", id);
+  if (error) console.error("Delete sync failed:", error.message);
+}
+
+async function syncReplaceAllTasks(newTasks) {
+  if (!db || !currentUser) return;
+  await db.from("tasks").delete().eq("user_id", currentUser.id);
+  if (newTasks.length) {
+    const { error } = await db.from("tasks").insert(newTasks.map(taskToRow));
+    if (error) console.error("Bulk sync failed:", error.message);
+  }
+}
+
+async function loadTasksFromDB() {
+  if (!db || !currentUser) return;
+  const { data, error } = await db
+    .from("tasks")
+    .select("*")
+    .eq("user_id", currentUser.id)
+    .order("created_at");
+  if (error) {
+    console.error("Load failed:", error.message);
+    return;
+  }
+  tasks = (data || []).map(rowToTask);
+  saveState();
+}
+
+async function saveMessage(role, content) {
+  if (!db || !currentUser) return;
+  const { error } = await db.from("messages").insert({ user_id: currentUser.id, role, content });
+  if (error) console.error("Message sync failed:", error.message);
+}
+
+async function loadMessagesFromDB() {
+  if (!db || !currentUser) return;
+  const { data, error } = await db
+    .from("messages")
+    .select("*")
+    .eq("user_id", currentUser.id)
+    .order("created_at");
+  if (error) {
+    console.error("Message load failed:", error.message);
+    return;
+  }
+  history.length = 0;
+  (data || []).forEach((row) => history.push({ role: row.role, content: row.content }));
+}
+
+function showAuthScreen() {
+  authScreen.classList.remove("hidden");
+  appEl.classList.add("app-hidden");
+  chatBubble.classList.add("hidden");
+  boardEl.classList.add("hidden");
+  boardEl.classList.remove("visible");
+  chat.innerHTML = "";
+  history.length = 0;
+}
+
+async function enterApp() {
+  authScreen.classList.add("hidden");
+  appEl.classList.remove("app-hidden");
+
+  await loadTasksFromDB();
+  await loadMessagesFromDB();
+
+  chat.innerHTML = "";
+
+  if (history.length === 0) {
+    addBubble("assistant", "Hi! I am your schedule assistant, how can I help you?");
+  } else {
+    history.forEach((msg) => {
+      if (msg.role === "user") {
+        addBubble("user", msg.content);
+      } else {
+        const { cleanText } = extractSchedule(msg.content);
+        addBubble("assistant", cleanText);
+      }
+    });
+  }
+
+  if (boardActive && tasks.length) {
+    renderBoard();
+    showBoard();
+    minimizeChat();
+  }
+}
+
+function setAuthMode(signup) {
+  isSignupMode = signup;
+  authSubmit.textContent = signup ? "Sign up" : "Log in";
+  authSubtitle.textContent = signup
+    ? "Create an account to sync your schedule across devices."
+    : "Log in to sync your schedule across devices.";
+  authToggleText.textContent = signup ? "Already have an account?" : "Don't have an account?";
+  authToggleBtn.textContent = signup ? "Log in" : "Sign up";
+  authError.classList.add("hidden");
+}
+
+authToggleBtn.addEventListener("click", () => setAuthMode(!isSignupMode));
+
+authForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  authError.classList.add("hidden");
+  authError.style.color = "";
+
+  if (!db) {
+    authError.textContent = "Still connecting, please try again in a moment.";
+    authError.classList.remove("hidden");
+    return;
+  }
+
+  authSubmit.disabled = true;
+  authSubmit.textContent = isSignupMode ? "Signing up..." : "Logging in...";
+
+  const email = authEmail.value.trim();
+  const password = authPassword.value;
+
+  const { data, error } = isSignupMode
+    ? await db.auth.signUp({ email, password })
+    : await db.auth.signInWithPassword({ email, password });
+
+  if (error) {
+    authError.textContent = error.message;
+    authError.classList.remove("hidden");
+    authSubmit.disabled = false;
+    setAuthMode(isSignupMode);
+    return;
+  }
+
+  if (isSignupMode && data.user && !data.session) {
+    authError.textContent = "Check your email to confirm your account, then log in.";
+    authError.classList.remove("hidden");
+    authError.style.color = "#2ecc71";
+    authSubmit.disabled = false;
+    setAuthMode(false);
+    return;
+  }
+
+  authSubmit.disabled = false;
+});
+
+logoutBtn.addEventListener("click", async () => {
+  if (db) await db.auth.signOut();
+});
+
+async function initSupabase() {
+  const res = await fetch("/api/config");
+  const config = await res.json();
+
+  if (!config.supabaseUrl || !config.supabaseAnonKey) {
+    console.error("Supabase is not configured. Set SUPABASE_URL and SUPABASE_ANON_KEY in .env");
+    authSubtitle.textContent = "Supabase isn't configured yet — see server setup.";
+    showAuthScreen();
+    return;
+  }
+
+  db = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey);
+
+  db.auth.onAuthStateChange((_event, session) => {
+    if (session && session.user) {
+      currentUser = session.user;
+      enterApp();
+    } else {
+      currentUser = null;
+      tasks = [];
+      boardActive = false;
+      showAuthScreen();
+    }
+  });
+
+  const {
+    data: { session },
+  } = await db.auth.getSession();
+
+  if (session && session.user) {
+    currentUser = session.user;
+    await enterApp();
+  } else {
+    showAuthScreen();
+  }
 }
 
 // ---------- Markdown rendering ----------
@@ -97,6 +330,7 @@ function applySchedule(items) {
       column: "todo",
     }));
   saveState();
+  syncReplaceAllTasks(tasks);
   addOptionsCard();
 }
 
@@ -414,6 +648,7 @@ function setCardColor(id, color) {
   task.color = color;
   saveState();
   refreshViews();
+  syncTask(task);
 }
 
 function editCard(id, titleEl) {
@@ -430,6 +665,7 @@ function editCard(id, titleEl) {
       task.title = newTitle;
       saveState();
       refreshViews();
+      syncTask(task);
     } else if (task) {
       titleEl.textContent = task.title;
     }
@@ -457,14 +693,17 @@ function deleteCard(id) {
   tasks = tasks.filter((t) => t.id !== id);
   saveState();
   refreshViews();
+  syncDeleteTask(id);
 }
 
 function addCard(column, titleText) {
   const trimmed = titleText.trim();
   if (!trimmed) return;
-  tasks.push({ id: crypto.randomUUID(), title: trimmed, time: "", column });
+  const newTask = { id: crypto.randomUUID(), title: trimmed, time: "", description: "", column };
+  tasks.push(newTask);
   saveState();
   refreshViews();
+  syncTask(newTask);
 }
 
 function moveCard(id, column) {
@@ -473,6 +712,7 @@ function moveCard(id, column) {
     task.column = column;
     saveState();
     refreshViews();
+    syncTask(task);
   }
 }
 
@@ -723,6 +963,7 @@ function setupEventInteractions(eventEl, task, handle) {
       task.time = `${formatClock(newStart)} - ${formatClock(newEnd)}`;
       saveState();
       refreshViews();
+      syncTask(task);
     } else if (mode === "move") {
       openTaskModal(task.id);
     }
@@ -892,6 +1133,7 @@ modalSave.addEventListener("click", () => {
 
   saveState();
   refreshViews();
+  syncTask(task);
   closeTaskModal();
 });
 
@@ -929,6 +1171,7 @@ form.addEventListener("submit", async (e) => {
 
   addBubble("user", text);
   history.push({ role: "user", content: text });
+  saveMessage("user", text);
   input.value = "";
   input.disabled = true;
   sendBtn.disabled = true;
@@ -954,6 +1197,7 @@ form.addEventListener("submit", async (e) => {
     loadingBubble.classList.remove("loading");
     renderMarkdown(loadingBubble, cleanText);
     history.push({ role: "assistant", content: data.reply });
+    saveMessage("assistant", data.reply);
 
     if (items && items.length) {
       applySchedule(items);
@@ -973,11 +1217,5 @@ form.addEventListener("submit", async (e) => {
 loadState();
 setupAddCardButtons();
 setupDropZones();
-
-addBubble("assistant", "Hi! I am your schedule assistant, how can I help you?");
-
-if (boardActive) {
-  renderBoard();
-  showBoard();
-  minimizeChat();
-}
+setAuthMode(false);
+initSupabase();

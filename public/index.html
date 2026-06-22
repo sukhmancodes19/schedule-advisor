@@ -7,6 +7,32 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+  <div id="authScreen" class="auth-screen hidden">
+    <div class="auth-card">
+      <div class="auth-header">
+        <span class="header-dot"></span>
+        <h1>Schedule Advisor</h1>
+      </div>
+      <p class="auth-subtitle" id="authSubtitle">Log in to sync your schedule across devices.</p>
+
+      <form id="authForm">
+        <label class="auth-label">Email
+          <input id="authEmail" type="email" required autocomplete="email" />
+        </label>
+        <label class="auth-label">Password
+          <input id="authPassword" type="password" required autocomplete="current-password" minlength="6" />
+        </label>
+        <p id="authError" class="auth-error hidden"></p>
+        <button id="authSubmit" class="auth-submit-btn" type="submit">Log in</button>
+      </form>
+
+      <p class="auth-toggle">
+        <span id="authToggleText">Don't have an account?</span>
+        <button id="authToggleBtn" type="button">Sign up</button>
+      </p>
+    </div>
+  </div>
+
   <div id="board" class="board hidden">
     <header class="board-header">
       <h2>Your Schedule</h2>
@@ -42,10 +68,11 @@
     </div>
   </div>
 
-  <div class="app" id="app">
+  <div class="app app-hidden" id="app">
     <header class="header">
       <span class="header-dot"></span>
       <h1>Schedule Advisor</h1>
+      <button id="logoutBtn" class="icon-btn" type="button" title="Log out">&#9211;</button>
       <button id="minimizeChat" class="icon-btn hidden" type="button" title="Minimize">&#8211;</button>
     </header>
 
@@ -100,6 +127,7 @@
   <script src="/vendor/marked/marked.umd.js"></script>
   <script src="/vendor/dompurify/purify.min.js"></script>
   <script src="/vendor/jspdf/jspdf.umd.min.js"></script>
+  <script src="/vendor/supabase/supabase.js"></script>
   <script src="script.js"></script>
 </body>
 </html>

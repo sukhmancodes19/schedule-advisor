@@ -7,6 +7,14 @@ app.use(express.static("public"));
 app.use("/vendor/marked", express.static("node_modules/marked/lib"));
 app.use("/vendor/dompurify", express.static("node_modules/dompurify/dist"));
 app.use("/vendor/jspdf", express.static("node_modules/jspdf/dist"));
+app.use("/vendor/supabase", express.static("node_modules/@supabase/supabase-js/dist/umd"));
+
+app.get("/api/config", (req, res) => {
+  res.json({
+    supabaseUrl: process.env.SUPABASE_URL || "",
+    supabaseAnonKey: process.env.SUPABASE_ANON_KEY || "",
+  });
+});
 
 const SYSTEM_PROMPT = `You are a friendly, practical scheduling advisor. The user will describe their day, tasks, deadlines, or goals in a free-form way.
 

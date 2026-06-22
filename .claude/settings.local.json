@@ -17,7 +17,9 @@
       "Bash(node --check public/script.js)",
       "Bash(node --check server.js)",
       "Bash(curl -s http://localhost:3000/vendor/jspdf/jspdf.umd.min.js -o /dev/null -w \"jspdf: %{http_code}\\\\n\")",
-      "Bash(curl -s http://localhost:3000/ -o /dev/null -w \"index: %{http_code}\\\\n\")"
+      "Bash(curl -s http://localhost:3000/ -o /dev/null -w \"index: %{http_code}\\\\n\")",
+      "Bash(curl -s http://localhost:3000/api/config)",
+      "Bash(curl -s http://localhost:3000/vendor/supabase/supabase.js -o /dev/null -w \"supabase vendor: %{http_code}\\\\n\")"
     ]
   }
 }
