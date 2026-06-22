@@ -8,6 +8,7 @@ const authToggleBtn = document.getElementById("authToggleBtn");
 const authToggleText = document.getElementById("authToggleText");
 const authSubtitle = document.getElementById("authSubtitle");
 const logoutBtn = document.getElementById("logoutBtn");
+const guestModeBtn = document.getElementById("guestModeBtn");
 
 const chat = document.getElementById("chat");
 const form = document.getElementById("form");
@@ -50,6 +51,7 @@ function saveState() {
 let db = null;
 let currentUser = null;
 let isSignupMode = false;
+let isGuestMode = false;
 
 function rowToTask(row) {
   return {
@@ -134,6 +136,7 @@ async function loadMessagesFromDB() {
 }
 
 function showAuthScreen() {
+  isGuestMode = false;
   authScreen.classList.remove("hidden");
   appEl.classList.add("app-hidden");
   chatBubble.classList.add("hidden");
@@ -226,7 +229,21 @@ authForm.addEventListener("submit", async (e) => {
   authSubmit.disabled = false;
 });
 
+guestModeBtn.addEventListener("click", () => {
+  isGuestMode = true;
+  currentUser = null;
+  enterApp();
+});
+
 logoutBtn.addEventListener("click", async () => {
+  if (isGuestMode) {
+    isGuestMode = false;
+    tasks = [];
+    boardActive = false;
+    saveState();
+    showAuthScreen();
+    return;
+  }
   if (db) await db.auth.signOut();
 });
 

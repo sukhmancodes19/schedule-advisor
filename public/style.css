@@ -1219,3 +1219,22 @@ body {
 .auth-toggle button:hover {
   text-decoration: underline;
 }
+
+.guest-mode-btn {
+  display: block;
+  width: 100%;
+  margin-top: 14px;
+  border: 1px dashed #d1d5db;
+  background: transparent;
+  color: #6b7280;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 10px;
+  border-radius: 20px;
+  cursor: pointer;
+}
+
+.guest-mode-btn:hover {
+  background: #f9fafb;
+  color: #2b2b2b;
+}
