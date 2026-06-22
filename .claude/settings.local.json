@@ -19,7 +19,13 @@
       "Bash(curl -s http://localhost:3000/vendor/jspdf/jspdf.umd.min.js -o /dev/null -w \"jspdf: %{http_code}\\\\n\")",
       "Bash(curl -s http://localhost:3000/ -o /dev/null -w \"index: %{http_code}\\\\n\")",
       "Bash(curl -s http://localhost:3000/api/config)",
-      "Bash(curl -s http://localhost:3000/vendor/supabase/supabase.js -o /dev/null -w \"supabase vendor: %{http_code}\\\\n\")"
+      "Bash(curl -s http://localhost:3000/vendor/supabase/supabase.js -o /dev/null -w \"supabase vendor: %{http_code}\\\\n\")",
+      "Bash(curl -s \"https://umqoulbbbaipkxebwiaf.supabase.co/rest/v1/tasks?select=*&limit=5\" -H \"apikey: sb_publishable_EbiPA4AISIv4t0HcpUMJjA_BQj1hf2J\")",
+      "Bash(curl -s \"https://umqoulbbbaipkxebwiaf.supabase.co/rest/v1/messages?select=*&limit=5\" -H \"apikey: sb_publishable_EbiPA4AISIv4t0HcpUMJjA_BQj1hf2J\")",
+      "Bash(curl -s -X POST https://umqoulbbbaipkxebwiaf.supabase.co/auth/v1/signup -H 'apikey: sb_publishable_EbiPA4AISIv4t0HcpUMJjA_BQj1hf2J' -H 'content-type: application/json' -d '{\"email\":\"qatester@example.com\",\"password\":\"TestPass123!\"}' -o /tmp/signup_resp2.json -w 'HTTP %{http_code}\\\\n')",
+      "Read(//tmp/**)",
+      "Bash(curl -s -X POST https://umqoulbbbaipkxebwiaf.supabase.co/auth/v1/signup -H 'apikey: sb_publishable_EbiPA4AISIv4t0HcpUMJjA_BQj1hf2J' -H 'content-type: application/json' -d '{\"email\":\"sukhmanbhullar1904+e2etest@gmail.com\",\"password\":\"TestPass123!\"}' -o /tmp/signup_resp3.json -w 'HTTP %{http_code}\\\\n')",
+      "mcp__Claude_in_Chrome__list_connected_browsers"
     ]
   }
 }
