@@ -7,6 +7,12 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+  <div id="bootLoader" class="boot-loader">
+    <div class="boot-spinner"></div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
   <div id="authScreen" class="auth-screen hidden">
     <div class="auth-card">
       <div class="auth-header">
@@ -74,6 +80,7 @@
     <header class="header">
       <span class="header-dot"></span>
       <h1>Schedule Advisor</h1>
+      <button id="personalizeBtn" class="icon-btn" type="button" title="Personalize">&#9881;</button>
       <button id="logoutBtn" class="icon-btn" type="button" title="Log out">&#9211;</button>
       <button id="minimizeChat" class="icon-btn hidden" type="button" title="Minimize">&#8211;</button>
     </header>
@@ -123,6 +130,35 @@
         <button id="modalDelete" class="modal-delete-btn" type="button">Delete task</button>
         <button id="modalSave" class="modal-save-btn" type="button">Save</button>
       </div>
+    </div>
+  </div>
+
+  <div id="personalizeModal" class="modal-overlay hidden">
+    <div class="modal">
+      <button id="personalizeClose" class="modal-close" type="button">&#10005;</button>
+
+      <h2 class="personalize-title">Personalize your assistant</h2>
+      <p class="personalize-subtitle">Answer a few quick questions so I can plan schedules that actually fit your life. You can update these anytime.</p>
+
+      <form id="personalizeForm">
+        <label class="auth-label">What's your typical wake-up and sleep time?
+          <input id="prefSleep" type="text" placeholder="e.g. Wake at 7am, sleep around midnight" />
+        </label>
+
+        <label class="auth-label">What do you do for work/study, and what are your typical hours?
+          <input id="prefWork" type="text" placeholder="e.g. Software engineer, 9am-5pm weekdays" />
+        </label>
+
+        <label class="auth-label">Any recurring daily commitments? (gym, classes, family time, etc.)
+          <textarea id="prefCommitments" class="modal-description personalize-textarea" placeholder="e.g. Gym at 6pm, pick up kids at 3pm on Tuesdays"></textarea>
+        </label>
+
+        <label class="auth-label">Any planning preferences I should know?
+          <textarea id="prefNotes" class="modal-description personalize-textarea" placeholder="e.g. Prefer hard tasks in the morning, need a break every 2 hours"></textarea>
+        </label>
+
+        <button id="personalizeSave" class="modal-save-btn personalize-save-btn" type="submit">Save preferences</button>
+      </form>
     </div>
   </div>
 

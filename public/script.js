@@ -9,6 +9,17 @@ const authToggleText = document.getElementById("authToggleText");
 const authSubtitle = document.getElementById("authSubtitle");
 const logoutBtn = document.getElementById("logoutBtn");
 const guestModeBtn = document.getElementById("guestModeBtn");
+const bootLoader = document.getElementById("bootLoader");
+const toastEl = document.getElementById("toast");
+
+const personalizeBtn = document.getElementById("personalizeBtn");
+const personalizeModal = document.getElementById("personalizeModal");
+const personalizeClose = document.getElementById("personalizeClose");
+const personalizeForm = document.getElementById("personalizeForm");
+const prefSleep = document.getElementById("prefSleep");
+const prefWork = document.getElementById("prefWork");
+const prefCommitments = document.getElementById("prefCommitments");
+const prefNotes = document.getElementById("prefNotes");
 
 const chat = document.getElementById("chat");
 const form = document.getElementById("form");
@@ -29,6 +40,8 @@ const history = [];
 const STORAGE_KEY = "schedule_board_v1";
 let tasks = [];
 let boardActive = false;
+let isGuestMode = false;
+let preferences = null;
 
 function loadState() {
   try {
@@ -36,6 +49,11 @@ function loadState() {
     if (saved && Array.isArray(saved.tasks)) {
       tasks = saved.tasks;
       boardActive = !!saved.boardActive;
+      isGuestMode = !!saved.isGuestMode;
+      preferences = saved.preferences || null;
+      if (Array.isArray(saved.history)) {
+        history.push(...saved.history);
+      }
     }
   } catch {
     // ignore corrupt storage
@@ -43,7 +61,21 @@ function loadState() {
 }
 
 function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ tasks, boardActive }));
+  localStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify({ tasks, boardActive, isGuestMode, history, preferences })
+  );
+}
+
+let toastTimer = null;
+
+function toast(message, type = "error") {
+  clearTimeout(toastTimer);
+  toastEl.textContent = message;
+  toastEl.className = `toast ${type}`;
+  toastTimer = setTimeout(() => {
+    toastEl.classList.add("hidden");
+  }, 4000);
 }
 
 // ---------- Supabase auth + sync ----------
@@ -51,12 +83,11 @@ function saveState() {
 let db = null;
 let currentUser = null;
 let isSignupMode = false;
-let isGuestMode = false;
 
 function rowToTask(row) {
   return {
     id: row.id,
-    title: row.title,
+    title: row.title || "Untitled task",
     time: row.time || "",
     description: row.description || "",
     column: row.status || "todo",
@@ -78,61 +109,154 @@ function taskToRow(task) {
   };
 }
 
+async function logAuthContext(label) {
+  if (!db) {
+    console.warn(`[sync:${label}] skipped — Supabase client not initialized`);
+    return;
+  }
+  const { data, error } = await db.auth.getSession();
+  if (error) {
+    console.warn(`[sync:${label}] getSession error:`, error.message);
+    return;
+  }
+  console.log(`[sync:${label}] currentUser=${currentUser?.id ?? "null"} sessionUser=${data.session?.user?.id ?? "null"} tokenExpiresAt=${data.session?.expires_at ?? "n/a"}`);
+}
+
 async function syncTask(task) {
-  if (!db || !currentUser) return;
+  if (!db || !currentUser) {
+    console.warn(`[sync:syncTask] skipped — db=${!!db} currentUser=${!!currentUser}`);
+    return;
+  }
+  await logAuthContext("syncTask");
   const { error } = await db.from("tasks").upsert(taskToRow(task));
-  if (error) console.error("Sync failed:", error.message);
+  if (error) {
+    console.error("[sync:syncTask] failed:", error.message, error);
+    toast("Saved locally, but couldn't sync to your account.");
+  } else {
+    console.log(`[sync:syncTask] OK id=${task.id}`);
+  }
 }
 
 async function syncDeleteTask(id) {
-  if (!db || !currentUser) return;
+  if (!db || !currentUser) {
+    console.warn(`[sync:syncDeleteTask] skipped — db=${!!db} currentUser=${!!currentUser}`);
+    return;
+  }
+  await logAuthContext("syncDeleteTask");
   const { error } = await db.from("tasks").delete().eq("id", id);
-  if (error) console.error("Delete sync failed:", error.message);
+  if (error) {
+    console.error("[sync:syncDeleteTask] failed:", error.message, error);
+    toast("Deleted locally, but couldn't sync the delete to your account.");
+  } else {
+    console.log(`[sync:syncDeleteTask] OK id=${id}`);
+  }
 }
 
 async function syncReplaceAllTasks(newTasks) {
-  if (!db || !currentUser) return;
-  await db.from("tasks").delete().eq("user_id", currentUser.id);
+  if (!db || !currentUser) {
+    console.warn(`[sync:syncReplaceAllTasks] skipped — db=${!!db} currentUser=${!!currentUser}`);
+    return;
+  }
+  await logAuthContext("syncReplaceAllTasks");
+  const { error: delError } = await db.from("tasks").delete().eq("user_id", currentUser.id);
+  if (delError) console.error("[sync:syncReplaceAllTasks] delete failed:", delError.message, delError);
   if (newTasks.length) {
     const { error } = await db.from("tasks").insert(newTasks.map(taskToRow));
-    if (error) console.error("Bulk sync failed:", error.message);
+    if (error) {
+      console.error("[sync:syncReplaceAllTasks] insert failed:", error.message, error);
+      toast("Schedule saved locally, but couldn't sync to your account.");
+    } else {
+      console.log(`[sync:syncReplaceAllTasks] OK inserted=${newTasks.length}`);
+    }
   }
 }
 
 async function loadTasksFromDB() {
-  if (!db || !currentUser) return;
+  if (!db || !currentUser) {
+    console.warn(`[sync:loadTasksFromDB] skipped — db=${!!db} currentUser=${!!currentUser}`);
+    return;
+  }
+  await logAuthContext("loadTasksFromDB");
   const { data, error } = await db
     .from("tasks")
     .select("*")
     .eq("user_id", currentUser.id)
     .order("created_at");
   if (error) {
-    console.error("Load failed:", error.message);
+    console.error("[sync:loadTasksFromDB] failed:", error.message, error);
+    toast("Couldn't load your saved tasks from your account.");
     return;
   }
+  console.log(`[sync:loadTasksFromDB] OK rows=${data?.length ?? 0}`);
   tasks = (data || []).map(rowToTask);
   saveState();
 }
 
 async function saveMessage(role, content) {
-  if (!db || !currentUser) return;
+  if (!db || !currentUser) {
+    console.warn(`[sync:saveMessage] skipped — db=${!!db} currentUser=${!!currentUser}`);
+    return;
+  }
   const { error } = await db.from("messages").insert({ user_id: currentUser.id, role, content });
-  if (error) console.error("Message sync failed:", error.message);
+  if (error) console.error("[sync:saveMessage] failed:", error.message, error);
 }
 
 async function loadMessagesFromDB() {
-  if (!db || !currentUser) return;
+  if (!db || !currentUser) {
+    console.warn(`[sync:loadMessagesFromDB] skipped — db=${!!db} currentUser=${!!currentUser}`);
+    return;
+  }
+  await logAuthContext("loadMessagesFromDB");
   const { data, error } = await db
     .from("messages")
     .select("*")
     .eq("user_id", currentUser.id)
     .order("created_at");
   if (error) {
-    console.error("Message load failed:", error.message);
+    console.error("[sync:loadMessagesFromDB] failed:", error.message, error);
+    toast("Couldn't load your chat history from your account.");
     return;
   }
+  console.log(`[sync:loadMessagesFromDB] OK rows=${data?.length ?? 0}`);
   history.length = 0;
   (data || []).forEach((row) => history.push({ role: row.role, content: row.content }));
+}
+
+async function savePreferencesToDB() {
+  if (!db || !currentUser) {
+    console.warn(`[sync:savePreferencesToDB] skipped — db=${!!db} currentUser=${!!currentUser}`);
+    return;
+  }
+  const { error } = await db
+    .from("preferences")
+    .upsert({ user_id: currentUser.id, data: preferences, updated_at: new Date().toISOString() });
+  if (error) {
+    console.error("[sync:savePreferencesToDB] failed:", error.message, error);
+    toast("Saved locally, but couldn't sync your preferences to your account.");
+  } else {
+    console.log("[sync:savePreferencesToDB] OK");
+  }
+}
+
+async function loadPreferencesFromDB() {
+  if (!db || !currentUser) {
+    console.warn(`[sync:loadPreferencesFromDB] skipped — db=${!!db} currentUser=${!!currentUser}`);
+    return;
+  }
+  const { data, error } = await db
+    .from("preferences")
+    .select("data")
+    .eq("user_id", currentUser.id)
+    .maybeSingle();
+  if (error) {
+    console.error("[sync:loadPreferencesFromDB] failed:", error.message, error);
+    toast("Couldn't load your saved preferences from your account.");
+    return;
+  }
+  if (data && data.data) {
+    preferences = data.data;
+    saveState();
+  }
 }
 
 function showAuthScreen() {
@@ -152,11 +276,12 @@ async function enterApp() {
 
   await loadTasksFromDB();
   await loadMessagesFromDB();
+  await loadPreferencesFromDB();
 
   chat.innerHTML = "";
 
   if (history.length === 0) {
-    addBubble("assistant", "Hi! I am your schedule assistant, how can I help you?");
+    addBubble("assistant", "Hi! I am your schedule assistant, how can I help you?", true);
   } else {
     history.forEach((msg) => {
       if (msg.role === "user") {
@@ -173,7 +298,40 @@ async function enterApp() {
     showBoard();
     minimizeChat();
   }
+
+  if (!preferences) {
+    openPersonalizeModal();
+  }
 }
+
+function openPersonalizeModal() {
+  prefSleep.value = preferences?.sleep || "";
+  prefWork.value = preferences?.work || "";
+  prefCommitments.value = preferences?.commitments || "";
+  prefNotes.value = preferences?.notes || "";
+  personalizeModal.classList.remove("hidden");
+}
+
+function closePersonalizeModal() {
+  personalizeModal.classList.add("hidden");
+}
+
+personalizeBtn.addEventListener("click", openPersonalizeModal);
+personalizeClose.addEventListener("click", closePersonalizeModal);
+
+personalizeForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  preferences = {
+    sleep: prefSleep.value.trim(),
+    work: prefWork.value.trim(),
+    commitments: prefCommitments.value.trim(),
+    notes: prefNotes.value.trim(),
+  };
+  saveState();
+  savePreferencesToDB();
+  closePersonalizeModal();
+  toast("Preferences saved.", "success");
+});
 
 function setAuthMode(signup) {
   isSignupMode = signup;
@@ -210,7 +368,10 @@ authForm.addEventListener("submit", async (e) => {
     : await db.auth.signInWithPassword({ email, password });
 
   if (error) {
-    authError.textContent = error.message;
+    const isRateLimited = error.status === 429 || /rate limit/i.test(error.message);
+    authError.textContent = isRateLimited
+      ? "Too many attempts right now (Supabase's free-tier email limit). Wait a few minutes and try again, or use \"Continue without an account\" below."
+      : error.message;
     authError.classList.remove("hidden");
     authSubmit.disabled = false;
     setAuthMode(isSignupMode);
@@ -232,6 +393,7 @@ authForm.addEventListener("submit", async (e) => {
 guestModeBtn.addEventListener("click", () => {
   isGuestMode = true;
   currentUser = null;
+  saveState();
   enterApp();
 });
 
@@ -240,6 +402,7 @@ logoutBtn.addEventListener("click", async () => {
     isGuestMode = false;
     tasks = [];
     boardActive = false;
+    history.length = 0;
     saveState();
     showAuthScreen();
     return;
@@ -254,7 +417,12 @@ async function initSupabase() {
   if (!config.supabaseUrl || !config.supabaseAnonKey) {
     console.error("Supabase is not configured. Set SUPABASE_URL and SUPABASE_ANON_KEY in .env");
     authSubtitle.textContent = "Supabase isn't configured yet — see server setup.";
-    showAuthScreen();
+    if (isGuestMode) {
+      await enterApp();
+    } else {
+      showAuthScreen();
+    }
+    bootLoader.classList.add("hidden");
     return;
   }
 
@@ -263,8 +431,9 @@ async function initSupabase() {
   db.auth.onAuthStateChange((_event, session) => {
     if (session && session.user) {
       currentUser = session.user;
+      isGuestMode = false;
       enterApp();
-    } else {
+    } else if (!isGuestMode) {
       currentUser = null;
       tasks = [];
       boardActive = false;
@@ -278,10 +447,15 @@ async function initSupabase() {
 
   if (session && session.user) {
     currentUser = session.user;
+    isGuestMode = false;
+    await enterApp();
+  } else if (isGuestMode) {
     await enterApp();
   } else {
     showAuthScreen();
   }
+
+  bootLoader.classList.add("hidden");
 }
 
 // ---------- Markdown rendering ----------
@@ -291,7 +465,18 @@ function renderMarkdown(bubble, text) {
   bubble.innerHTML = DOMPurify.sanitize(html);
 }
 
-function addBubble(role, text) {
+const MASCOT_SVG = `<svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <circle cx="24" cy="13" r="2.5" fill="#ff8c42"/>
+  <line x1="24" y1="15" x2="24" y2="20" stroke="#ff8c42" stroke-width="2" stroke-linecap="round"/>
+  <rect x="9" y="19" width="30" height="24" rx="12" fill="#fff8f1" stroke="#ff8c42" stroke-width="2"/>
+  <circle cx="18" cy="31" r="3" fill="#2b2b2b"/>
+  <circle cx="30" cy="31" r="3" fill="#2b2b2b"/>
+  <path d="M18 38 Q24 42 30 38" stroke="#2b2b2b" stroke-width="2" fill="none" stroke-linecap="round"/>
+  <circle cx="13" cy="34" r="2.5" fill="#ffb88c" opacity="0.7"/>
+  <circle cx="35" cy="34" r="2.5" fill="#ffb88c" opacity="0.7"/>
+</svg>`;
+
+function addBubble(role, text, useMascot = false) {
   const isAssistant = role.startsWith("assistant");
 
   const row = document.createElement("div");
@@ -299,8 +484,12 @@ function addBubble(role, text) {
 
   if (isAssistant) {
     const avatar = document.createElement("span");
-    avatar.className = "avatar";
-    avatar.textContent = "🤖";
+    avatar.className = useMascot ? "avatar avatar-mascot" : "avatar";
+    if (useMascot) {
+      avatar.innerHTML = MASCOT_SVG;
+    } else {
+      avatar.textContent = "🤖";
+    }
     row.appendChild(avatar);
   }
 
@@ -321,19 +510,26 @@ function addBubble(role, text) {
 // ---------- Schedule block extraction ----------
 
 function extractSchedule(text) {
-  const match = text.match(/```schedule\s*([\s\S]*?)```/);
-  if (!match) return { cleanText: text, items: null };
+  const fenceRegex = /```[a-zA-Z]*\s*\n?([\s\S]*?)```/g;
+  let fenceMatch;
 
-  const cleanText = text.replace(match[0], "").trim();
-  try {
-    const parsed = JSON.parse(match[1].trim());
-    if (Array.isArray(parsed)) {
-      return { cleanText, items: parsed };
+  while ((fenceMatch = fenceRegex.exec(text)) !== null) {
+    try {
+      const parsed = JSON.parse(fenceMatch[1].trim());
+      if (
+        Array.isArray(parsed) &&
+        parsed.length > 0 &&
+        parsed.every((item) => item && typeof item.title === "string")
+      ) {
+        const cleanText = text.replace(fenceMatch[0], "").trim();
+        return { cleanText, items: parsed };
+      }
+    } catch {
+      // not JSON, or not our schedule shape — keep scanning other fences
     }
-  } catch {
-    // malformed JSON, ignore
   }
-  return { cleanText, items: null };
+
+  return { cleanText: text, items: null };
 }
 
 function applySchedule(items) {
@@ -420,19 +616,37 @@ function addOptionsCard() {
 
 function applyViewSelection(selected) {
   if (selected.includes("pdf")) {
-    generateSchedulePDF();
+    try {
+      generateSchedulePDF();
+    } catch (err) {
+      console.error("PDF generation failed:", err);
+      toast("Couldn't generate the PDF, but your other selections still loaded.");
+    }
   }
 
   const wantsBoard = selected.includes("board");
   const wantsCalendar = selected.includes("calendar");
 
   if (wantsBoard || wantsCalendar) {
-    boardActive = true;
-    saveState();
-    renderBoard();
-    showBoard();
-    minimizeChat();
-    setActiveView(wantsCalendar && !wantsBoard ? "calendar" : "board");
+    if (tasks.length === 0) {
+      addBubble(
+        "assistant",
+        "No tasks yet — tell me about your schedule first and I'll set up your board/calendar."
+      );
+      return;
+    }
+
+    try {
+      boardActive = true;
+      saveState();
+      renderBoard();
+      showBoard();
+      minimizeChat();
+      setActiveView(wantsCalendar && !wantsBoard ? "calendar" : "board");
+    } catch (err) {
+      console.error("Failed to show board/calendar:", err);
+      toast("Couldn't open the board/calendar view.");
+    }
   }
 }
 
@@ -512,7 +726,7 @@ const EMOJI_RULES = [
 ];
 
 function getEmoji(title) {
-  const lower = title.toLowerCase();
+  const lower = (title || "").toLowerCase();
   for (const rule of EMOJI_RULES) {
     if (rule.keywords.some((kw) => lower.includes(kw))) return rule.emoji;
   }
@@ -549,16 +763,10 @@ function renderBoard() {
 function buildCard(task) {
   const card = document.createElement("div");
   card.className = "card";
-  card.draggable = true;
   card.dataset.id = task.id;
   if (task.color) card.dataset.color = task.color;
 
-  card.addEventListener("dragstart", () => {
-    card.classList.add("dragging");
-  });
-  card.addEventListener("dragend", () => {
-    card.classList.remove("dragging");
-  });
+  setupCardDrag(card, task);
 
   const title = document.createElement("p");
   title.className = "card-title";
@@ -750,7 +958,14 @@ function setupAddCardButtons() {
       confirmBtn.textContent = "Add";
 
       const submit = () => {
-        addCard(column, input.value);
+        const trimmed = input.value.trim();
+        if (!trimmed) {
+          input.classList.add("shake");
+          setTimeout(() => input.classList.remove("shake"), 400);
+          input.focus();
+          return;
+        }
+        addCard(column, trimmed);
         form.remove();
       };
 
@@ -768,22 +983,75 @@ function setupAddCardButtons() {
   });
 }
 
-function setupDropZones() {
-  document.querySelectorAll(".cards").forEach((zone) => {
-    zone.addEventListener("dragover", (e) => {
-      e.preventDefault();
-      zone.classList.add("drag-over");
-    });
-    zone.addEventListener("dragleave", () => {
-      zone.classList.remove("drag-over");
-    });
-    zone.addEventListener("drop", (e) => {
-      e.preventDefault();
-      zone.classList.remove("drag-over");
-      const dragging = document.querySelector(".card.dragging");
-      if (!dragging) return;
-      moveCard(dragging.dataset.id, zone.dataset.column);
-    });
+function setupCardDrag(card, task) {
+  let startX = 0;
+  let startY = 0;
+  let dragging = false;
+  let clone = null;
+
+  const clearDropHighlights = () => {
+    document.querySelectorAll(".cards.drag-over").forEach((z) => z.classList.remove("drag-over"));
+  };
+
+  const onPointerMove = (e) => {
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+
+    if (!dragging && Math.hypot(dx, dy) > 6) {
+      dragging = true;
+      card.classList.add("dragging");
+      const rect = card.getBoundingClientRect();
+      clone = card.cloneNode(true);
+      clone.classList.add("card-drag-clone");
+      clone.style.width = `${rect.width}px`;
+      clone.style.left = `${rect.left}px`;
+      clone.style.top = `${rect.top}px`;
+      clone.dataset.startLeft = rect.left;
+      clone.dataset.startTop = rect.top;
+      clone.dataset.startX = startX;
+      clone.dataset.startY = startY;
+      document.body.appendChild(clone);
+    }
+
+    if (dragging && clone) {
+      const baseLeft = parseFloat(clone.dataset.startLeft);
+      const baseTop = parseFloat(clone.dataset.startTop);
+      const baseX = parseFloat(clone.dataset.startX);
+      const baseY = parseFloat(clone.dataset.startY);
+      clone.style.left = `${baseLeft + (e.clientX - baseX)}px`;
+      clone.style.top = `${baseTop + (e.clientY - baseY)}px`;
+
+      clearDropHighlights();
+      const under = document.elementFromPoint(e.clientX, e.clientY);
+      const zone = under && under.closest(".cards");
+      if (zone) zone.classList.add("drag-over");
+    }
+  };
+
+  const onPointerUp = (e) => {
+    document.removeEventListener("pointermove", onPointerMove);
+    document.removeEventListener("pointerup", onPointerUp);
+    card.classList.remove("dragging");
+    clearDropHighlights();
+
+    if (dragging) {
+      if (clone) clone.remove();
+      const under = document.elementFromPoint(e.clientX, e.clientY);
+      const zone = under && under.closest(".cards");
+      if (zone) moveCard(task.id, zone.dataset.column);
+    }
+
+    dragging = false;
+    clone = null;
+  };
+
+  card.addEventListener("pointerdown", (e) => {
+    if (e.target.closest(".card-actions") || e.target.closest(".card-title")) return;
+    startX = e.clientX;
+    startY = e.clientY;
+    dragging = false;
+    document.addEventListener("pointermove", onPointerMove);
+    document.addEventListener("pointerup", onPointerUp);
   });
 }
 
@@ -928,16 +1196,29 @@ function renderCalendar() {
 
 function setActiveView(view) {
   viewTabs.forEach((tab) => tab.classList.toggle("active", tab.dataset.view === view));
-  if (view === "calendar") {
-    boardColumnsEl.classList.add("hidden");
-    calendarViewEl.classList.remove("hidden");
-    renderCalendar();
-    const body = calendarViewEl.querySelector(".calendar-body");
-    body.scrollTop = 7 * 60 - 40;
-  } else {
-    boardColumnsEl.classList.remove("hidden");
-    calendarViewEl.classList.add("hidden");
-  }
+
+  const showCalendar = view === "calendar";
+  const toHide = showCalendar ? boardColumnsEl : calendarViewEl;
+  const toShow = showCalendar ? calendarViewEl : boardColumnsEl;
+
+  toHide.classList.add("view-fade-out");
+
+  setTimeout(() => {
+    toHide.classList.add("hidden");
+
+    toShow.classList.add("view-fade-out");
+    toShow.classList.remove("hidden");
+
+    if (showCalendar) {
+      renderCalendar();
+      const body = calendarViewEl.querySelector(".calendar-body");
+      body.scrollTop = 7 * 60 - 40;
+    }
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => toShow.classList.remove("view-fade-out"));
+    });
+  }, 160);
 }
 
 viewTabs.forEach((tab) => {
@@ -953,7 +1234,7 @@ function setupEventInteractions(eventEl, task, handle) {
   let startHeight = 0;
   let moved = false;
 
-  const onMouseMove = (e) => {
+  const onPointerMove = (e) => {
     const delta = Math.round(e.clientY - startY);
     if (Math.abs(delta) > 3) moved = true;
 
@@ -967,9 +1248,9 @@ function setupEventInteractions(eventEl, task, handle) {
     }
   };
 
-  const onMouseUp = () => {
-    document.removeEventListener("mousemove", onMouseMove);
-    document.removeEventListener("mouseup", onMouseUp);
+  const onPointerUp = () => {
+    document.removeEventListener("pointermove", onPointerMove);
+    document.removeEventListener("pointerup", onPointerUp);
     eventEl.classList.remove("dragging-event");
 
     if (moved) {
@@ -988,7 +1269,7 @@ function setupEventInteractions(eventEl, task, handle) {
     mode = null;
   };
 
-  handle.addEventListener("mousedown", (e) => {
+  handle.addEventListener("pointerdown", (e) => {
     e.preventDefault();
     e.stopPropagation();
     mode = "resize";
@@ -997,11 +1278,11 @@ function setupEventInteractions(eventEl, task, handle) {
     startTop = parseInt(eventEl.style.top, 10);
     startHeight = parseInt(eventEl.style.height, 10);
     eventEl.classList.add("dragging-event");
-    document.addEventListener("mousemove", onMouseMove);
-    document.addEventListener("mouseup", onMouseUp);
+    document.addEventListener("pointermove", onPointerMove);
+    document.addEventListener("pointerup", onPointerUp);
   });
 
-  eventEl.addEventListener("mousedown", (e) => {
+  eventEl.addEventListener("pointerdown", (e) => {
     if (e.target === handle) return;
     e.preventDefault();
     mode = "move";
@@ -1010,8 +1291,8 @@ function setupEventInteractions(eventEl, task, handle) {
     startTop = parseInt(eventEl.style.top, 10);
     startHeight = parseInt(eventEl.style.height, 10);
     eventEl.classList.add("dragging-event");
-    document.addEventListener("mousemove", onMouseMove);
-    document.addEventListener("mouseup", onMouseUp);
+    document.addEventListener("pointermove", onPointerMove);
+    document.addEventListener("pointerup", onPointerUp);
   });
 }
 
@@ -1131,7 +1412,13 @@ modalSave.addEventListener("click", () => {
   if (!task) return;
 
   const newTitle = modalTitle.value.trim();
-  if (newTitle) task.title = newTitle;
+  if (!newTitle) {
+    modalTitle.classList.add("shake");
+    modalTitle.focus();
+    setTimeout(() => modalTitle.classList.remove("shake"), 400);
+    return;
+  }
+  task.title = newTitle;
 
   task.description = modalDescription.value.trim();
   task.color = modalColorRow.dataset.selected || null;
@@ -1181,31 +1468,52 @@ minimizeBtn.addEventListener("click", minimizeChat);
 
 // ---------- Chat submit ----------
 
+function friendlyChatError(rawError) {
+  if (rawError && typeof rawError === "object") {
+    const msg = rawError.error?.message || rawError.message;
+    if (msg) return msg;
+  }
+  return "Something went wrong talking to the assistant. Please try again.";
+}
+
+input.addEventListener("input", () => {
+  sendBtn.disabled = !input.value.trim();
+});
+sendBtn.disabled = true;
+
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
   const text = input.value.trim();
-  if (!text) return;
+  if (!text) {
+    input.classList.add("shake");
+    setTimeout(() => input.classList.remove("shake"), 400);
+    input.focus();
+    return;
+  }
 
   addBubble("user", text);
   history.push({ role: "user", content: text });
+  saveState();
   saveMessage("user", text);
   input.value = "";
   input.disabled = true;
   sendBtn.disabled = true;
 
-  const loadingBubble = addBubble("assistant loading", "Thinking...");
+  const loadingBubble = addBubble("assistant loading", "");
+  loadingBubble.innerHTML = '<span class="chat-loading-inline"><span></span><span></span><span></span></span>';
 
   try {
     const res = await fetch("/api/chat", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ messages: history }),
+      body: JSON.stringify({ messages: history, preferences }),
     });
     const data = await res.json();
 
     if (!res.ok) {
       loadingBubble.classList.remove("loading");
-      renderMarkdown(loadingBubble, `Error: ${JSON.stringify(data.error)}`);
+      renderMarkdown(loadingBubble, `⚠️ ${friendlyChatError(data.error)}`);
+      toast("The assistant couldn't respond. Please try again.");
       return;
     }
 
@@ -1214,17 +1522,24 @@ form.addEventListener("submit", async (e) => {
     loadingBubble.classList.remove("loading");
     renderMarkdown(loadingBubble, cleanText);
     history.push({ role: "assistant", content: data.reply });
+    saveState();
     saveMessage("assistant", data.reply);
 
     if (items && items.length) {
       applySchedule(items);
     }
+
+    if (Array.isArray(data.actions) && data.actions.length) {
+      applyViewSelection(data.actions);
+    }
   } catch (err) {
     loadingBubble.classList.remove("loading");
-    renderMarkdown(loadingBubble, `Error: ${err.message}`);
+    renderMarkdown(loadingBubble, `⚠️ Couldn't reach the server. Check your connection and try again.`);
+    toast("Network error — couldn't reach the server.");
+    console.error("Chat request failed:", err);
   } finally {
     input.disabled = false;
-    sendBtn.disabled = false;
+    sendBtn.disabled = !input.value.trim();
     input.focus();
   }
 });
@@ -1233,6 +1548,5 @@ form.addEventListener("submit", async (e) => {
 
 loadState();
 setupAddCardButtons();
-setupDropZones();
 setAuthMode(false);
 initSupabase();

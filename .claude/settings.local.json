@@ -25,7 +25,17 @@
       "Bash(curl -s -X POST https://umqoulbbbaipkxebwiaf.supabase.co/auth/v1/signup -H 'apikey: sb_publishable_EbiPA4AISIv4t0HcpUMJjA_BQj1hf2J' -H 'content-type: application/json' -d '{\"email\":\"qatester@example.com\",\"password\":\"TestPass123!\"}' -o /tmp/signup_resp2.json -w 'HTTP %{http_code}\\\\n')",
       "Read(//tmp/**)",
       "Bash(curl -s -X POST https://umqoulbbbaipkxebwiaf.supabase.co/auth/v1/signup -H 'apikey: sb_publishable_EbiPA4AISIv4t0HcpUMJjA_BQj1hf2J' -H 'content-type: application/json' -d '{\"email\":\"sukhmanbhullar1904+e2etest@gmail.com\",\"password\":\"TestPass123!\"}' -o /tmp/signup_resp3.json -w 'HTTP %{http_code}\\\\n')",
-      "mcp__Claude_in_Chrome__list_connected_browsers"
+      "mcp__Claude_in_Chrome__list_connected_browsers",
+      "Bash(curl -s -X POST http://localhost:3000/api/chat -H \"content-type: application/json\" -d '{\"messages\":[{\"role\":\"user\",\"content\":\"Final schedule: gym 6-7pm, study 8-9pm\"}]}')",
+      "Bash(curl -s -X POST http://localhost:3000/api/chat -H \"content-type: application/json\" -d '{\"messages\":[{\"role\":\"user\",\"content\":\"Build me a full weekday schedule from 5:30am wake up to 10:30pm sleep, AND a separate weekend schedule, both with about 12 time blocks each including descriptions. Finalize both, ok done.\"}]}'  -o /tmp/test_reply.json -w \"HTTP %{http_code}\\\\n\")",
+      "Bash(curl -s -X POST http://localhost:3000/api/chat -H \"content-type: application/json\" -d '{\"messages\":[{\"role\":\"user\",\"content\":\"I work 9-5 remote, no commute, prefer morning workouts, cook at home, weekend priorities are hiking and family time, morning energy person. Build me a full weekday schedule from 5:30am wake up to 10:30pm sleep, AND a separate weekend schedule, both with about 12 time blocks each including short descriptions. Finalize both now, ok done.\"}]}' -o /tmp/test_reply2.json -w \"HTTP %{http_code}\\\\n\")",
+      "Bash(node -e ' *)",
+      "Bash(curl -s -X POST http://localhost:3000/api/chat -H \"content-type: application/json\" -d '{\"messages\":[{\"role\":\"user\",\"content\":\"I work 9-5 remote, no commute, prefer morning workouts, cook at home, weekend priorities are hiking and family time, morning energy person. Build me a full weekday schedule from 5:30am wake up to 10:30pm sleep, AND a separate weekend schedule, both with about 12 time blocks each including short descriptions. Finalize both now, ok done.\"}]}' -o test_reply2.json -w \"HTTP %{http_code}\\\\n\")",
+      "Bash(rm test_reply2.json)",
+      "Bash(python3 -c ' *)",
+      "Bash(npm install *)",
+      "Bash(curl -s http://localhost:3000/vendor/quicksand/quicksand-latin-600-normal.woff2 -o /dev/null -w \"font: %{http_code}\\\\n\")",
+      "Bash(curl -s -X POST http://localhost:3000/api/chat -H \"content-type: application/json\" -d '{\"messages\":[{\"role\":\"user\",\"content\":\"What time should I wake up?\"}],\"preferences\":{\"sleep\":\"Wake at 6am, sleep at 11pm\",\"work\":\"Teacher, 8am-3pm\",\"commitments\":\"Gym Mon/Wed/Fri 5pm\",\"notes\":\"prefer hard tasks in morning\"}}')"
     ]
   }
 }
