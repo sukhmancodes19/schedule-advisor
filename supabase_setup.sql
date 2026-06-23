@@ -53,3 +53,26 @@ create policy "Users can insert their own messages"
 
 -- (Image attachments are stored as base64 directly in tasks.image_url for now —
 -- no Supabase Storage bucket needed.)
+
+-- Preferences: one row per user, holds their "Personalize" answers
+-- (wake/sleep time, work routine, recurring commitments, planning preferences)
+-- so the AI can use them as context without the user repeating themselves.
+create table public.preferences (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  data jsonb not null default '{}'::jsonb,
+  updated_at timestamptz default now()
+);
+
+alter table public.preferences enable row level security;
+
+create policy "Users can view their own preferences"
+  on public.preferences for select
+  using (auth.uid() = user_id);
+
+create policy "Users can insert their own preferences"
+  on public.preferences for insert
+  with check (auth.uid() = user_id);
+
+create policy "Users can update their own preferences"
+  on public.preferences for update
+  using (auth.uid() = user_id);
