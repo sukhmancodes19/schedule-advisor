@@ -603,6 +603,8 @@ button.chat-bubble:hover {
   border-left: 4px solid transparent;
   transition: border-color 0.15s ease;
   touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .card-drag-clone {
@@ -640,6 +642,7 @@ button.chat-bubble:hover {
 
 .card.dragging {
   opacity: 0.4;
+  cursor: grabbing;
 }
 
 .card:hover {
@@ -664,6 +667,9 @@ button.chat-bubble:hover {
   border-radius: 4px;
   padding: 2px 4px;
   background: #fff8ef;
+  -webkit-user-select: text;
+  user-select: text;
+  cursor: text;
 }
 
 .card-time {

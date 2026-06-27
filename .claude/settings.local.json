@@ -37,7 +37,11 @@
       "Bash(curl -s http://localhost:3000/vendor/quicksand/quicksand-latin-600-normal.woff2 -o /dev/null -w \"font: %{http_code}\\\\n\")",
       "Bash(curl -s -X POST http://localhost:3000/api/chat -H \"content-type: application/json\" -d '{\"messages\":[{\"role\":\"user\",\"content\":\"What time should I wake up?\"}],\"preferences\":{\"sleep\":\"Wake at 6am, sleep at 11pm\",\"work\":\"Teacher, 8am-3pm\",\"commitments\":\"Gym Mon/Wed/Fri 5pm\",\"notes\":\"prefer hard tasks in morning\"}}')",
       "Bash(gh pr create --title 'Polish UX, fix rough edges, and add direct tool-calling for PDF/board/calendar' --body ' *)",
-      "Bash(env)"
+      "Bash(env)",
+      "Bash(node -e \"const c=require\\('fs'\\).readFileSync\\('public/style.css','utf8'\\);console.log\\('braces',\\(c.match\\(/{/g\\)||[]\\).length,\\(c.match\\(/}/g\\)||[]\\).length\\)\")",
+      "Bash(curl -s http://localhost:3000/script.js)",
+      "PowerShell(npm run start)",
+      "Bash(curl -s http://localhost:3000/script.js -o /dev/null -w \"served: %{http_code}\\\\n\")"
     ]
   }
 }

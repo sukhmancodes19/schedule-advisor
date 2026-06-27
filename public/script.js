@@ -50,7 +50,8 @@ function loadState() {
       tasks = saved.tasks;
       boardActive = !!saved.boardActive;
       isGuestMode = !!saved.isGuestMode;
-      preferences = saved.preferences || null;
+      // Preferences are intentionally NOT restored from localStorage. Logged-in
+      // users load them from Supabase; guests start fresh every session.
       if (Array.isArray(saved.history)) {
         history.push(...saved.history);
       }
@@ -61,9 +62,11 @@ function loadState() {
 }
 
 function saveState() {
+  // preferences is deliberately excluded — it must never persist to localStorage.
+  // Logged-in prefs live in Supabase; guest prefs stay in memory for the session only.
   localStorage.setItem(
     STORAGE_KEY,
-    JSON.stringify({ tasks, boardActive, isGuestMode, history, preferences })
+    JSON.stringify({ tasks, boardActive, isGuestMode, history })
   );
 }
 
@@ -232,7 +235,7 @@ async function savePreferencesToDB() {
     .upsert({ user_id: currentUser.id, data: preferences, updated_at: new Date().toISOString() });
   if (error) {
     console.error("[sync:savePreferencesToDB] failed:", error.message, error);
-    toast("Saved locally, but couldn't sync your preferences to your account.");
+    toast("Couldn't save your preferences to your account. They'll apply for this session only.");
   } else {
     console.log("[sync:savePreferencesToDB] OK");
   }
@@ -255,12 +258,12 @@ async function loadPreferencesFromDB() {
   }
   if (data && data.data) {
     preferences = data.data;
-    saveState();
   }
 }
 
 function showAuthScreen() {
   isGuestMode = false;
+  preferences = null;
   authScreen.classList.remove("hidden");
   appEl.classList.add("app-hidden");
   chatBubble.classList.add("hidden");
@@ -393,6 +396,8 @@ authForm.addEventListener("submit", async (e) => {
 guestModeBtn.addEventListener("click", () => {
   isGuestMode = true;
   currentUser = null;
+  // Guests always start with a clean slate — no remembered Personalize info.
+  preferences = null;
   saveState();
   enterApp();
 });
@@ -403,6 +408,7 @@ logoutBtn.addEventListener("click", async () => {
     tasks = [];
     boardActive = false;
     history.length = 0;
+    preferences = null;
     saveState();
     showAuthScreen();
     return;
@@ -988,9 +994,22 @@ function setupCardDrag(card, task) {
   let startY = 0;
   let dragging = false;
   let clone = null;
+  // Set after a real drag so the synthesized click doesn't open the editor.
+  let suppressClick = false;
 
   const clearDropHighlights = () => {
     document.querySelectorAll(".cards.drag-over").forEach((z) => z.classList.remove("drag-over"));
+  };
+
+  const teardown = () => {
+    document.removeEventListener("pointermove", onPointerMove);
+    document.removeEventListener("pointerup", onPointerUp);
+    document.removeEventListener("pointercancel", onPointerCancel);
+    card.classList.remove("dragging");
+    clearDropHighlights();
+    if (clone) clone.remove();
+    clone = null;
+    dragging = false;
   };
 
   const onPointerMove = (e) => {
@@ -1029,30 +1048,53 @@ function setupCardDrag(card, task) {
   };
 
   const onPointerUp = (e) => {
-    document.removeEventListener("pointermove", onPointerMove);
-    document.removeEventListener("pointerup", onPointerUp);
-    card.classList.remove("dragging");
-    clearDropHighlights();
+    const wasDragging = dragging;
+    const dropX = e.clientX;
+    const dropY = e.clientY;
+    teardown();
 
-    if (dragging) {
-      if (clone) clone.remove();
-      const under = document.elementFromPoint(e.clientX, e.clientY);
+    if (wasDragging) {
+      const under = document.elementFromPoint(dropX, dropY);
       const zone = under && under.closest(".cards");
       if (zone) moveCard(task.id, zone.dataset.column);
+      suppressClick = true;
     }
+  };
 
-    dragging = false;
-    clone = null;
+  // System-interrupted gesture (e.g. an incoming call) — clean up, don't move.
+  const onPointerCancel = () => {
+    teardown();
   };
 
   card.addEventListener("pointerdown", (e) => {
-    if (e.target.closest(".card-actions") || e.target.closest(".card-title")) return;
+    // Only the primary pointer/button starts a drag (ignore right-click etc.).
+    if (e.button !== 0) return;
+    // Let the action buttons handle their own taps.
+    if (e.target.closest(".card-actions")) return;
+    // Don't hijack the pointer while the title is being edited inline.
+    if (e.target.closest('[contenteditable="true"]')) return;
+
     startX = e.clientX;
     startY = e.clientY;
     dragging = false;
+    suppressClick = false;
     document.addEventListener("pointermove", onPointerMove);
     document.addEventListener("pointerup", onPointerUp);
+    document.addEventListener("pointercancel", onPointerCancel);
   });
+
+  // Runs before the title's bubble-phase click handler, so a drop never edits.
+  card.addEventListener(
+    "click",
+    (e) => {
+      if (suppressClick) {
+        e.stopPropagation();
+        e.preventDefault();
+        suppressClick = false;
+      }
+    },
+    true
+  );
 }
 
 // ---------- Calendar view ----------
